@@ -1,20 +1,19 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
-import 'package:universal_recommendation_system/history.dart';
 import 'package:universal_recommendation_system/util/colors.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BookScreen extends StatefulWidget {
-  const BookScreen({super.key});
+  const BookScreen({Key? key}) : super(key: key);
 
   @override
-  State<BookScreen> createState() => _BookScreenState();
+  _BookScreenState createState() => _BookScreenState();
 }
 
 class _BookScreenState extends State<BookScreen> {
   TextEditingController searchControllerbook = TextEditingController();
-
   List<String> bookHistory = [];
   List<String> bookSuggestions = [];
   String userId = FirebaseAuth.instance.currentUser!.uid;
@@ -24,7 +23,7 @@ class _BookScreenState extends State<BookScreen> {
   void initState() {
     super.initState();
     // Fetch book history when the widget is initialized
-    updateBookHistory('');
+    updatebookHistory('');
   }
 
   @override
@@ -55,8 +54,8 @@ class _BookScreenState extends State<BookScreen> {
                       // and update the bookHistory and bookSuggestions accordingly
                       // For example, you can call a function to fetch book data.
                       print(searchTerm);
-                      updateBookHistory(searchTerm);
-                      historyData.storeBookHistory(userId, searchTerm);
+                      updatebookHistory(searchTerm);
+                      historyData.storebookHistory(userId, searchTerm);
                       searchControllerbook.clear();
                     },
                   ),
@@ -84,16 +83,16 @@ class _BookScreenState extends State<BookScreen> {
     );
   }
 
-  void updateBookHistory(String searchTerm) async {
+  void updatebookHistory(String searchTerm) async {
     String userId = FirebaseAuth
         .instance.currentUser!.uid; // Replace with the actual user ID
 
-    final fetchedBookHistory = await historyData.fetchBookHistory(userId);
+    final fetchedbookHistory = await historyData.fetchbookHistory(userId);
 
     setState(() {
-      bookHistory = fetchedBookHistory;
+      bookHistory = fetchedbookHistory;
       bookSuggestions =
-          fetchedBookHistory; // Update suggestions based on fetched history
+          fetchedbookHistory; // Update suggestions based on fetched history
     });
   }
 
@@ -113,7 +112,7 @@ class _BookScreenState extends State<BookScreen> {
 }
 
 class HistoryData {
-  Future<List<String>> fetchBookHistory(String userId) async {
+  Future<List<String>> fetchbookHistory(String userId) async {
     try {
       final userDocRef =
           FirebaseFirestore.instance.collection('history').doc(userId);
@@ -135,7 +134,7 @@ class HistoryData {
     }
   }
 
-  Future<void> storeBookHistory(String userId, String book) async {
+  Future<void> storebookHistory(String userId, String book) async {
     try {
       final userDocRef =
           FirebaseFirestore.instance.collection('history').doc(userId);
