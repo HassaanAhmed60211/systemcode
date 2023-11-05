@@ -1,5 +1,6 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
 import 'package:universal_recommendation_system/util/colors.dart';
@@ -17,13 +18,14 @@ class _MovieScreenState extends State<MovieScreen> {
   List<String> movieHistory = [];
   List<String> movieSuggestions = [];
   String userId = FirebaseAuth.instance.currentUser!.uid;
-  final HistoryData historyData = HistoryData(); // Create an instance
+  final HistoryData historyData = HistoryData();
+  late Stream<List<String>> movieHistoryStream;
+  String? searchError;
 
   @override
   void initState() {
     super.initState();
-    // Fetch movie history when the widget is initialized
-    updateMovieHistory('');
+    movieHistoryStream = historyData.fetchMovieHistoryStream(userId);
   }
 
   @override
@@ -40,6 +42,11 @@ class _MovieScreenState extends State<MovieScreen> {
               textFieldConfiguration: TextFieldConfiguration(
                 controller: searchControllermovie,
                 decoration: InputDecoration(
+                  labelText: searchError,
+                  labelStyle: TextStyle(
+                      color: Colors.red[500],
+                      fontWeight: FontWeight.w300,
+                      fontSize: 15),
                   filled: true,
                   fillColor: Colors.white,
                   suffixIcon: IconButton(
@@ -48,15 +55,24 @@ class _MovieScreenState extends State<MovieScreen> {
                       color: AppColors.bgColors,
                     ),
                     onPressed: () {
-                      // Handle the search functionality here
                       final searchTerm = searchControllermovie.text;
-                      // You can use the searchTerm to search for movies
-                      // and update the movieHistory and movieSuggestions accordingly
-                      // For example, you can call a function to fetch movie data.
-                      print(searchTerm);
-                      updateMovieHistory(searchTerm);
-                      historyData.storeMovieHistory(userId, searchTerm);
-                      searchControllermovie.clear();
+                      if (searchTerm.isEmpty) {
+                        setState(() {
+                          searchError = 'Field is empty';
+                        });
+                        Timer(const Duration(seconds: 1), () {
+                          searchError = null;
+                          setState(() {});
+                        });
+                      } else {
+                        // Clear the error message if it was previously set
+                        setState(() {
+                          searchError = null;
+                        });
+                        print(searchTerm);
+                        historyData.storeMovieHistory(userId, searchTerm);
+                        searchControllermovie.clear();
+                      }
                     },
                   ),
                 ),
@@ -76,30 +92,27 @@ class _MovieScreenState extends State<MovieScreen> {
               },
             ),
           ),
-          // Display the search results here using the `movieHistory`
-          // You can also display the suggestions using `movieSuggestions`
+          StreamBuilder<List<String>>(
+            stream: movieHistoryStream,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.active) {
+                movieHistory = snapshot.data ?? [];
+                return Container();
+              } else if (snapshot.hasError) {
+                return Text('Error: ${snapshot.error}');
+              } else {
+                return Container();
+              }
+            },
+          ),
         ],
       ),
     );
   }
 
-  void updateMovieHistory(String searchTerm) async {
-    String userId = FirebaseAuth
-        .instance.currentUser!.uid; // Replace with the actual user ID
-
-    final fetchedMovieHistory = await historyData.fetchMovieHistory(userId);
-
-    setState(() {
-      movieHistory = fetchedMovieHistory;
-      movieSuggestions =
-          fetchedMovieHistory; // Update suggestions based on fetched history
-    });
-  }
-
   List<String> _getSuggestions(String query) {
     final List<String> suggestions = [];
 
-    // Iterate in reverse order
     for (int i = movieHistory.length - 1; i >= 0; i--) {
       final String movie = movieHistory[i];
       if (movie.toLowerCase().contains(query.toLowerCase())) {
@@ -112,25 +125,29 @@ class _MovieScreenState extends State<MovieScreen> {
 }
 
 class HistoryData {
-  Future<List<String>> fetchMovieHistory(String userId) async {
+  Stream<List<String>> fetchMovieHistoryStream(String userId) {
     try {
       final userDocRef =
           FirebaseFirestore.instance.collection('history').doc(userId);
       final movieHistoryCollection = userDocRef.collection('movie');
-      final movieHistoryDocument = movieHistoryCollection.doc(userId);
 
-      final movieHistorySnapshot = await movieHistoryDocument.get();
-      if (movieHistorySnapshot.exists) {
-        final data = movieHistorySnapshot.data();
-        if (data != null && data['movieHistory'] is List) {
-          final movieHistory = List<String>.from(data['movieHistory']);
-          return movieHistory;
+      return movieHistoryCollection.doc(userId).snapshots().map((snapshot) {
+        if (snapshot.exists) {
+          final data = snapshot.data();
+          if (data != null && data['movieHistory'] is List) {
+            final movieHistoryList =
+                List<Map<String, dynamic>>.from(data['movieHistory']);
+            final movies = movieHistoryList
+                .map((movieData) => movieData['movie'].toString())
+                .toList();
+            return movies;
+          }
         }
-      }
-      return [];
+        return [];
+      });
     } catch (e) {
       print('Error fetching movie history: $e');
-      return [];
+      return Stream.value([]);
     }
   }
 
@@ -139,24 +156,21 @@ class HistoryData {
       final userDocRef =
           FirebaseFirestore.instance.collection('history').doc(userId);
       final movieHistoryCollection = userDocRef.collection('movie');
-      final movieHistoryDocument = movieHistoryCollection.doc(
-          userId); // Replace 'user doc id' with the actual user document ID
+      final movieHistoryDocument = movieHistoryCollection.doc(userId);
 
-      final existingData = await movieHistoryDocument.get();
-      List<String> movieHistory = [];
+      // Get the current timestamp
+      final Timestamp timestamp = Timestamp.now();
 
-      if (existingData.exists) {
-        final data = existingData.data();
-        if (data != null && data['movieHistory'] is List) {
-          movieHistory = List<String>.from(data['movieHistory']);
-        }
-      } else {
-        movieHistory = [];
-      }
+      // Create a map with the movie and timestamp
+      final Map<String, dynamic> movieData = {
+        'movie': movie,
+        'timestamp': timestamp,
+      };
 
-      movieHistory.add(movie);
-
-      await movieHistoryDocument.set({'movieHistory': movieHistory});
+      // Add this map to the movie history
+      await movieHistoryDocument.set({
+        'movieHistory': FieldValue.arrayUnion([movieData])
+      }, SetOptions(merge: true));
       print('Movie history data added successfully');
     } catch (e) {
       print('Error storing movie history: $e');

@@ -1,5 +1,6 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
 import 'package:universal_recommendation_system/util/colors.dart';
@@ -17,13 +18,13 @@ class _BookScreenState extends State<BookScreen> {
   List<String> bookHistory = [];
   List<String> bookSuggestions = [];
   String userId = FirebaseAuth.instance.currentUser!.uid;
-  final HistoryData historyData = HistoryData(); // Create an instance
-
+  final HistoryData historyData = HistoryData();
+  late Stream<List<String>> bookHistoryStream;
+  String? searchError;
   @override
   void initState() {
     super.initState();
-    // Fetch book history when the widget is initialized
-    updatebookHistory('');
+    bookHistoryStream = historyData.fetchbookHistoryStream(userId);
   }
 
   @override
@@ -40,6 +41,11 @@ class _BookScreenState extends State<BookScreen> {
               textFieldConfiguration: TextFieldConfiguration(
                 controller: searchControllerbook,
                 decoration: InputDecoration(
+                  labelText: searchError,
+                  labelStyle: TextStyle(
+                      color: Colors.red[500],
+                      fontWeight: FontWeight.w300,
+                      fontSize: 15),
                   filled: true,
                   fillColor: Colors.white,
                   suffixIcon: IconButton(
@@ -48,15 +54,24 @@ class _BookScreenState extends State<BookScreen> {
                       color: AppColors.bgColors,
                     ),
                     onPressed: () {
-                      // Handle the search functionality here
                       final searchTerm = searchControllerbook.text;
-                      // You can use the searchTerm to search for books
-                      // and update the bookHistory and bookSuggestions accordingly
-                      // For example, you can call a function to fetch book data.
-                      print(searchTerm);
-                      updatebookHistory(searchTerm);
-                      historyData.storebookHistory(userId, searchTerm);
-                      searchControllerbook.clear();
+                      if (searchTerm.isEmpty) {
+                        setState(() {
+                          searchError = 'Field is empty';
+                        });
+                        Timer(const Duration(seconds: 1), () {
+                          searchError = null;
+                          setState(() {});
+                        });
+                      } else {
+                        // Clear the error message if it was previously set
+                        setState(() {
+                          searchError = null;
+                        });
+                        print(searchTerm);
+                        historyData.storebookHistory(userId, searchTerm);
+                        searchControllerbook.clear();
+                      }
                     },
                   ),
                 ),
@@ -76,30 +91,27 @@ class _BookScreenState extends State<BookScreen> {
               },
             ),
           ),
-          // Display the search results here using the `bookHistory`
-          // You can also display the suggestions using `bookSuggestions`
+          StreamBuilder<List<String>>(
+            stream: bookHistoryStream,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.active) {
+                bookHistory = snapshot.data ?? [];
+                return Container();
+              } else if (snapshot.hasError) {
+                return Text('Error: ${snapshot.error}');
+              } else {
+                return Container();
+              }
+            },
+          ),
         ],
       ),
     );
   }
 
-  void updatebookHistory(String searchTerm) async {
-    String userId = FirebaseAuth
-        .instance.currentUser!.uid; // Replace with the actual user ID
-
-    final fetchedbookHistory = await historyData.fetchbookHistory(userId);
-
-    setState(() {
-      bookHistory = fetchedbookHistory;
-      bookSuggestions =
-          fetchedbookHistory; // Update suggestions based on fetched history
-    });
-  }
-
   List<String> _getSuggestions(String query) {
     final List<String> suggestions = [];
 
-    // Iterate in reverse order
     for (int i = bookHistory.length - 1; i >= 0; i--) {
       final String book = bookHistory[i];
       if (book.toLowerCase().contains(query.toLowerCase())) {
@@ -111,26 +123,31 @@ class _BookScreenState extends State<BookScreen> {
   }
 }
 
+// fetching and storing history function in this class
 class HistoryData {
-  Future<List<String>> fetchbookHistory(String userId) async {
+  Stream<List<String>> fetchbookHistoryStream(String userId) {
     try {
       final userDocRef =
           FirebaseFirestore.instance.collection('history').doc(userId);
       final bookHistoryCollection = userDocRef.collection('book');
-      final bookHistoryDocument = bookHistoryCollection.doc(userId);
 
-      final bookHistorySnapshot = await bookHistoryDocument.get();
-      if (bookHistorySnapshot.exists) {
-        final data = bookHistorySnapshot.data();
-        if (data != null && data['bookHistory'] is List) {
-          final bookHistory = List<String>.from(data['bookHistory']);
-          return bookHistory;
+      return bookHistoryCollection.doc(userId).snapshots().map((snapshot) {
+        if (snapshot.exists) {
+          final data = snapshot.data();
+          if (data != null && data['bookHistory'] is List) {
+            final bookHistoryList =
+                List<Map<String, dynamic>>.from(data['bookHistory']);
+            final books = bookHistoryList
+                .map((bookData) => bookData['book'].toString())
+                .toList();
+            return books;
+          }
         }
-      }
-      return [];
+        return [];
+      });
     } catch (e) {
       print('Error fetching book history: $e');
-      return [];
+      return Stream.value([]);
     }
   }
 
@@ -139,24 +156,21 @@ class HistoryData {
       final userDocRef =
           FirebaseFirestore.instance.collection('history').doc(userId);
       final bookHistoryCollection = userDocRef.collection('book');
-      final bookHistoryDocument = bookHistoryCollection.doc(
-          userId); // Replace 'user doc id' with the actual user document ID
+      final bookHistoryDocument = bookHistoryCollection.doc(userId);
 
-      final existingData = await bookHistoryDocument.get();
-      List<String> bookHistory = [];
+      // Get the current timestamp
+      final Timestamp timestamp = Timestamp.now();
 
-      if (existingData.exists) {
-        final data = existingData.data();
-        if (data != null && data['bookHistory'] is List) {
-          bookHistory = List<String>.from(data['bookHistory']);
-        }
-      } else {
-        bookHistory = [];
-      }
+      // Create a map with the book and timestamp
+      final Map<String, dynamic> bookData = {
+        'book': book,
+        'timestamp': timestamp,
+      };
 
-      bookHistory.add(book);
-
-      await bookHistoryDocument.set({'bookHistory': bookHistory});
+      // Add this map to the book history
+      await bookHistoryDocument.set({
+        'bookHistory': FieldValue.arrayUnion([bookData])
+      }, SetOptions(merge: true));
       print('book history data added successfully');
     } catch (e) {
       print('Error storing book history: $e');

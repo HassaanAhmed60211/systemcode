@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:email_auth/email_auth.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -22,10 +24,6 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> {
-  final ScrollController _scrollController = ScrollController(
-    initialScrollOffset: 0.0,
-  );
-  final GlobalKey _menuKey = GlobalKey();
   final _auth = FirebaseAuth.instance;
   final user = FirebaseAuth.instance.currentUser;
   final db = FirebaseFirestore.instance;
@@ -211,9 +209,15 @@ class _HomeState extends State<Home> {
             onTap: () {
               print("Movie");
               if (_auth.currentUser != null) {
-                setState(() {
-                  screenProvider.setCurrentScreen(1);
-                });
+                final user = _auth.currentUser;
+                if (user!.emailVerified) {
+                  setState(() {
+                    screenProvider
+                        .setCurrentScreen(1); // Display the Movie screen
+                  });
+                } else {
+                  _showEmailVerifyDialog(); // Show the email verification dialog
+                }
               } else {
                 _showLoginDialog();
               }
@@ -227,9 +231,15 @@ class _HomeState extends State<Home> {
           InkWell(
             onTap: () {
               if (_auth.currentUser != null) {
-                setState(() {
-                  screenProvider.setCurrentScreen(2);
-                });
+                final user = _auth.currentUser;
+                if (user!.emailVerified) {
+                  setState(() {
+                    screenProvider
+                        .setCurrentScreen(2); // Display the Movie screen
+                  });
+                } else {
+                  _showEmailVerifyDialog(); // Show the email verification dialog
+                }
               } else {
                 _showLoginDialog();
               }
@@ -244,9 +254,15 @@ class _HomeState extends State<Home> {
             onTap: () {
               setState(() {});
               if (_auth.currentUser != null) {
-                setState(() {
-                  screenProvider.setCurrentScreen(3);
-                });
+                final user = _auth.currentUser;
+                if (user!.emailVerified) {
+                  setState(() {
+                    screenProvider
+                        .setCurrentScreen(3); // Display the Movie screen
+                  });
+                } else {
+                  _showEmailVerifyDialog(); // Show the email verification dialog
+                }
               } else {
                 _showLoginDialog();
               }
@@ -260,9 +276,15 @@ class _HomeState extends State<Home> {
           InkWell(
             onTap: () {
               if (_auth.currentUser != null) {
-                setState(() {
-                  screenProvider.setCurrentScreen(4);
-                });
+                final user = _auth.currentUser;
+                if (user!.emailVerified) {
+                  setState(() {
+                    screenProvider
+                        .setCurrentScreen(4); // Display the Movie screen
+                  });
+                } else {
+                  _showEmailVerifyDialog(); // Show the email verification dialog
+                }
               } else {
                 _showLoginDialog();
               }
@@ -278,15 +300,10 @@ class _HomeState extends State<Home> {
     });
   }
 
-  TextEditingController signupControllerusername = TextEditingController();
-  TextEditingController signupControllerEmail = TextEditingController();
-  TextEditingController signupControllerPassword = TextEditingController();
-  TextEditingController signupControllerAge = TextEditingController();
-  TextEditingController signupControllerGender = TextEditingController();
   TextEditingController loginControlleremail = TextEditingController();
   TextEditingController loginControllerpassword = TextEditingController();
   final GlobalKey<FormState> _loginFormKey = GlobalKey<FormState>();
-  final GlobalKey<FormState> _signupFormKey = GlobalKey<FormState>();
+
   bool _autoValidate = false;
   String errorCode = '';
   bool error = false;
@@ -294,7 +311,6 @@ class _HomeState extends State<Home> {
     await showDialog(
       context: context,
       builder: (BuildContext context) {
-        var userprovider = Provider.of<UserProvider>(context);
         return StatefulBuilder(
           builder: (context, setState) {
             return Center(
@@ -322,6 +338,7 @@ class _HomeState extends State<Home> {
                         },
                       ),
                       TextFormField(
+                        obscureText: true,
                         controller: loginControllerpassword,
                         decoration:
                             const InputDecoration(labelText: 'Password'),
@@ -434,6 +451,15 @@ class _HomeState extends State<Home> {
     );
   }
 
+  EmailAuth emailAuth = EmailAuth(sessionName: "User Registration");
+  TextEditingController signupControllerusername = TextEditingController();
+  TextEditingController signupControllerEmail = TextEditingController();
+  TextEditingController signupControllerPassword = TextEditingController();
+  TextEditingController signupControllerAge = TextEditingController();
+  TextEditingController signupControllerGender = TextEditingController();
+  TextEditingController otpController = TextEditingController();
+  final GlobalKey<FormState> _signupFormKey = GlobalKey<FormState>();
+
   Future<void> _showSignupDialog() async {
     await showDialog(
       context: context,
@@ -474,6 +500,7 @@ class _HomeState extends State<Home> {
                     },
                   ),
                   TextFormField(
+                    obscureText: true,
                     controller: signupControllerPassword,
                     decoration: const InputDecoration(labelText: 'Password'),
                     validator: (value) {
@@ -615,18 +642,20 @@ class _HomeState extends State<Home> {
       });
       try {
         await _auth.createUserWithEmailAndPassword(
-            email: signupControllerEmail.text,
-            password: signupControllerPassword.text);
+          email: signupControllerEmail.text,
+          password: signupControllerPassword.text,
+        );
 
         Navigator.pop(context);
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           addUser(UserModel(
-              userid: user.uid,
-              username: signupControllerusername.text,
-              email: signupControllerEmail.text,
-              age: signupControllerAge.text,
-              gender: signupControllerGender.text));
+            userid: user.uid,
+            username: signupControllerusername.text,
+            email: signupControllerEmail.text,
+            age: signupControllerAge.text,
+            gender: signupControllerGender.text,
+          ));
         }
 
         signupControllerEmail.clear();
@@ -660,5 +689,47 @@ class _HomeState extends State<Home> {
         _autoValidate = true;
       });
     }
+  }
+
+  Future<void> _showEmailVerifyDialog() async {
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Center(
+              child: AlertDialog(
+                  title: const Text("Click to verify your email"),
+                  content: ElevatedButton(
+                      onPressed: () async {
+                        _auth.currentUser!.sendEmailVerification();
+                        final snackBar = SnackBar(
+                          /// need to set following properties for best effect of awesome_snackbar_content
+                          elevation: 0,
+                          behavior: SnackBarBehavior.floating,
+                          backgroundColor: Colors.transparent,
+                          content: AwesomeSnackbarContent(
+                            title: 'Success!',
+                            message:
+                                'A verification link has been sent to your email address. Please check your inbox and click on the link to complete the verification process',
+
+                            /// change contentType to ContentType.success, ContentType.warning or ContentType.help for variants
+                            contentType: ContentType.success,
+                          ),
+                        );
+
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(snackBar);
+                        _auth.signOut();
+                        refreshKey.currentState?.show();
+                        Navigator.pop(context);
+                      },
+                      child: const Text("Verify Email"))),
+            );
+          },
+        );
+      },
+    );
   }
 }
