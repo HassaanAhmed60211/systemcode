@@ -5,6 +5,7 @@ import 'package:email_auth/email_auth.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:toggle_switch/toggle_switch.dart';
 import 'package:universal_recommendation_system/book_screen.dart';
 import 'package:universal_recommendation_system/fashion_screen.dart';
 import 'package:universal_recommendation_system/home_screen.dart';
@@ -455,11 +456,10 @@ class _HomeState extends State<Home> {
   TextEditingController signupControllerusername = TextEditingController();
   TextEditingController signupControllerEmail = TextEditingController();
   TextEditingController signupControllerPassword = TextEditingController();
-  TextEditingController signupControllerAge = TextEditingController();
-  TextEditingController signupControllerGender = TextEditingController();
   TextEditingController otpController = TextEditingController();
   final GlobalKey<FormState> _signupFormKey = GlobalKey<FormState>();
-
+  List<String> gender = ['Male', 'Female'];
+  String genderSelected = '';
   Future<void> _showSignupDialog() async {
     await showDialog(
       context: context,
@@ -513,25 +513,31 @@ class _HomeState extends State<Home> {
                       return null;
                     },
                   ),
-                  TextFormField(
-                    controller: signupControllerAge,
-                    decoration: const InputDecoration(labelText: 'Age'),
-                    validator: (value) {
-                      if (value!.isEmpty) {
-                        return 'Please enter your age';
-                      }
-                      return null;
-                    },
+                  const SizedBox(
+                    height: 10,
                   ),
-                  TextFormField(
-                    controller: signupControllerGender,
-                    decoration: const InputDecoration(labelText: 'Gender'),
-                    validator: (value) {
-                      if (value!.isEmpty) {
-                        return 'Please enter your gender';
-                      }
-                      return null;
-                    },
+                  Align(
+                    alignment: Alignment.topLeft,
+                    child: ToggleSwitch(
+                      minWidth: 90.0,
+                      initialLabelIndex: 1,
+                      cornerRadius: 20.0,
+                      activeFgColor: Colors.white,
+                      inactiveBgColor: Colors.grey,
+                      inactiveFgColor: Colors.white,
+                      totalSwitches: 2,
+                      labels: gender,
+                      activeBgColors: const [
+                        [Colors.blue],
+                        [Colors.pink]
+                      ],
+                      onToggle: (index) {
+                        if (index != null) {
+                          genderSelected = gender[index];
+                          print(genderSelected);
+                        }
+                      },
+                    ),
                   ),
                   const SizedBox(
                     height: 5,
@@ -626,7 +632,6 @@ class _HomeState extends State<Home> {
             userid: User.userid,
             email: User.email,
             username: User.username,
-            age: User.age,
             gender: User.gender);
         await quizdatauser.doc(user.uid).set(uuserr.toMap());
       }
@@ -653,15 +658,12 @@ class _HomeState extends State<Home> {
             userid: user.uid,
             username: signupControllerusername.text,
             email: signupControllerEmail.text,
-            age: signupControllerAge.text,
-            gender: signupControllerGender.text,
+            gender: genderSelected,
           ));
         }
 
         signupControllerEmail.clear();
         signupControllerPassword.clear();
-        signupControllerAge.clear();
-        signupControllerGender.clear();
         signupControllerusername.clear();
         error = false;
         setState(() {});

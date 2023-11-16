@@ -1,4 +1,5 @@
 # Import necessary libraries
+from io import StringIO
 from flask import Flask, jsonify, request
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -6,13 +7,36 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import re
 import requests  # Don't forget to import the 'requests' library
+import pyrebase
 
 # Initialize Flask app
 app = Flask(__name__)
 
-# Load movie data
-movies = pd.read_csv("movies.csv")
-movie_links = pd.read_csv("links.csv")
+firebaseConfig = {
+  "apiKey": "AIzaSyDcbwavawNlhPRTEbb04-jUeGeYfWdNoPg",
+  "authDomain": "universalrecommendationsys.firebaseapp.com",
+  "projectId": "universalrecommendationsys",
+  "databaseURL": "https://universalrecommendationsystem.firebaseio.com",
+  "storageBucket": "universalrecommendationsys.appspot.com",
+  "messagingSenderId": "460969578586",
+  "appId": "1:460969578586:web:d2abac6335589182b44863",
+  "serviceAccount": "universalrecommendationsys-firebase-adminsdk-8f5jp-cc3e5b4b3c.json" 
+}
+firebase = pyrebase.initialize_app(firebaseConfig)
+storage = firebase.storage()
+
+links_path = "moviedata/links.csv"
+movies_path = "moviedata/movies.csv"
+
+# Function to read CSV file from Firebase Storage
+def read_csv_from_storage(file_path):
+    blob = storage.bucket.blob(file_path)
+    content = blob.download_as_string().decode('utf-8')
+    return pd.read_csv(StringIO(content))
+
+# Read CSV files into Pandas DataFrames
+movie_links = read_csv_from_storage(links_path)
+movies = read_csv_from_storage(movies_path)
 
 # Merge dataframes
 movie_links['tmdbId'] = movie_links['tmdbId'].astype('Int64')
